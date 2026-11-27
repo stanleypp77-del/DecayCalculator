@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>放射性衰變換算程式（Dose V.S. Time）</title>
+  <style>
+    /* ==========================================================================
+       全域盒模型與防水平溢位設定
+       ========================================================================== */
+    :root {
+      --panel-bg: #d9dde2;
+      --panel-face: #e6e9ed;
+      --card-bg: #f4f6f8;
+      --input-bg: #ffffff;
+      --input-alt-bg: #d3d8de;
+      --text-main: #111827;
+      --text-muted: #4b5563;
+      --accent-blue: #1d4ed8;
+      --success-bg: #ecfdf5;
+      --success-border: #059669;
+      --success-text: #065f46;
+      --warn-bg: #fffbeb;
+      --warn-border: #d97706;
+      --warn-text: #92400e;
+      --error-bg: #fef2f2;
+      --error-border: #dc2626;
+      --error-text: #991b1b;
+      --border-dark: #7c8591;
+      --border-light: #ffffff;
+      --border-mid: #aeb6c2;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      padding: 12px;
+      font-family: var(--font-sans);
+      background: linear-gradient(180deg, #c7cdd4 0%, #aeb6c0 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 直式單欄主容器（最大寬度 520px，絕不超出螢幕寬度） */
+    .app-shell {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .instrument-frame {
+      width: 100%;
+      background: var(--panel-bg);
+      border: 2px solid var(--border-dark);
+      border-radius: var(--radius-lg);
+      box-shadow: inset 1px 1px 0 var(--border-light), 0 8px 24px rgba(15, 23, 42, 0.16);
+      padding: 12px;
+    }
+
+    .top-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .top-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+      overflow-wrap: anywhere;
+    }
+
+    .top-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .inst-btn {
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 7px 11px;
+      border-radius: var(--radius-sm);
+      background: #e1e5ea;
+      color: var(--text-main);
+      border-top: 2px solid var(--border-light);
+      border-left: 2px solid var(--border-light);
+      border-right: 2px solid var(--border-dark);
+      border-bottom: 2px solid var(--border-dark);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .inst-btn:hover {
+      background: #edf0f4;
+    }
+
+    .inst-btn:active {
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+      transform: translateY(1px);
+    }
+
+    .inst-btn-primary {
+      background: #dbeafe;
+      color: #1e3a8a;
+    }
+
+    .inst-btn-primary:hover {
+      background: #bfdbfe;
+    }
+
+    /* Dose V.S. Time 外框 */
+    .dose-time-box {
+      position: relative;
+      width: 100%;
+      border: 1.5px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      background: var(--panel-face);
+      padding: 16px 12px 14px;
+      box-shadow: inset 1px 1px 0 var(--border-light);
+    }
+
+    .box-legend {
+      position: absolute;
+      top: -11px;
+      left: 10px;
+      background: var(--panel-face);
+      padding: 0 7px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    /* 核種與半衰期設定列 */
+    .isotope-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #c5ccd4;
+    }
+
+    .control-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      flex-wrap: wrap;
+    }
+
+    .inst-select {
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--text-main);
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+      cursor: pointer;
+    }
+
+    .halflife-input {
+      width: 96px;
+      max-width: 100%;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 5px 6px;
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--text-main);
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+    }
+
+    /* 直式單欄區塊：上方（Time1 + Dose1）→ 中間上下方向列（↓ / ↑ / ⇅）→ 下方（Time2 + Dose2） */
+    .vertical-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .group-card {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      padding: 11px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .group-card.has-computed {
+      background: var(--success-bg);
+      border-color: var(--success-border);
+      box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.14);
+    }
+
+    .group-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .group-title {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .group-sub {
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .computed-badge {
+      display: none;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #d1fae5;
+      color: var(--success-text);
+      border: 1px solid #6ee7b7;
+    }
+
+    .computed-badge.visible {
+      display: inline-block;
+    }
+
+    .field-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+    }
+
+    .field-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .datetime-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .date-input {
+      flex: 1 1 138px;
+      min-width: 0;
+      max-width: 168px;
+      font-family: var(--font-mono);
+      font-size: 0.92rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--text-main);
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+    }
+
+    .date-input.computed-field {
+      background: #d1fae5;
+      color: var(--success-text);
+    }
+
+    .date-input:focus {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 1px;
+    }
+
+    .today-mini-btn {
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: #e1e5ea;
+      color: var(--text-main);
+      border-top: 1.5px solid var(--border-light);
+      border-left: 1.5px solid var(--border-light);
+      border-right: 1.5px solid var(--border-dark);
+      border-bottom: 1.5px solid var(--border-dark);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .today-mini-btn:hover {
+      background: #edf0f4;
+    }
+
+    .today-mini-btn:active {
+      border-top: 1.5px solid var(--border-dark);
+      border-left: 1.5px solid var(--border-dark);
+      border-right: 1.5px solid var(--border-light);
+      border-bottom: 1.5px solid var(--border-light);
+    }
+
+    .time-input {
+      flex: 0 1 116px;
+      width: 116px;
+      max-width: 100%;
+      font-family: var(--font-mono);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-align: center;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--text-main);
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+    }
+
+    .time-input.computed-field {
+      background: #d1fae5;
+      color: var(--success-text);
+    }
+
+    .time-input:focus {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 1px;
+    }
+
+    .dose-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .dose-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .dose-input {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      font-weight: 700;
+      text-align: right;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+    }
+
+    .dose-input.mbq-field {
+      background: var(--input-bg);
+      color: var(--text-main);
+    }
+
+    .dose-input.mci-field {
+      background: var(--input-alt-bg);
+      color: #1f2937;
+    }
+
+    .dose-input.computed-field {
+      background: #d1fae5;
+      color: var(--success-text);
+    }
+
+    .dose-input:focus {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 1px;
+    }
+
+    .unit-tag {
+      width: 40px;
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .field-hint {
+      font-size: 0.73rem;
+      color: var(--text-muted);
+      overflow-wrap: anywhere;
+    }
+
+    .field-hint.error {
+      color: var(--error-text);
+      font-weight: 700;
+    }
+
+    /* 上下方向推算與交換列（↓ / ↑ / ⇅） */
+    .direction-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 8px;
+      background: #dce1e7;
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      width: 100%;
+    }
+
+    .dir-btn {
+      font-family: var(--font-sans);
+      font-size: 0.83rem;
+      font-weight: 700;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      background: #eef2f6;
+      color: var(--text-main);
+      border-top: 2px solid var(--border-light);
+      border-left: 2px solid var(--border-light);
+      border-right: 2px solid var(--border-dark);
+      border-bottom: 2px solid var(--border-dark);
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dir-btn:hover {
+      background: #eff6ff;
+      color: var(--accent-blue);
+    }
+
+    .dir-btn:active {
+      border-top: 2px solid var(--border-dark);
+      border-left: 2px solid var(--border-dark);
+      border-right: 2px solid var(--border-light);
+      border-bottom: 2px solid var(--border-light);
+      background: #dbeafe;
+      color: var(--accent-blue);
+      transform: translateY(1px);
+    }
+
+    .dir-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.15rem;
+      height: 1.15rem;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .dir-arrow svg {
+      width: 1.1rem;
+      height: 1.1rem;
+      stroke: currentColor;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    /* 物理參數與計算摘要 */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+      width: 100%;
+    }
+
+    @media (max-width: 380px) {
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .metric-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      min-width: 0;
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 0.94rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 1px;
+      overflow-wrap: anywhere;
+    }
+
+    .formula-note {
+      margin-top: 10px;
+      font-size: 0.73rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .formula-note code {
+      font-family: var(--font-mono);
+      background: #eef2f6;
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: var(--text-main);
+    }
+
+    /* 狀態列 */
+    .status-panel {
+      width: 100%;
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      border: 1px solid var(--border-mid);
+      background: #eef2f6;
+      font-size: 0.83rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .status-panel.is-success {
+      background: var(--success-bg);
+      border-color: var(--success-border);
+      color: var(--success-text);
+    }
+
+    .status-panel.is-warn {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-text);
+    }
+
+    .status-panel.is-error {
+      background: var(--error-bg);
+      border-color: var(--error-border);
+      color: var(--error-text);
+    }
+
+    .status-title {
+      font-weight: 700;
+    }
+
+    .status-detail {
+      font-size: 0.77rem;
+      opacity: 0.92;
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <section class="instrument-frame" aria-label="放射性衰變換算程式（Dose V.S. Time）">
+      <!-- 頂部工具列 -->
+      <header class="top-bar">
+        <div>
+          <h1 class="top-title">放射性衰變換算程式（Dose V.S. Time）</h1>
+          <div class="top-subtitle">任填 3 個主欄位自動算第 4 個空白欄位，或按 <code>↓</code> / <code>↑</code> 指定推算</div>
+        </div>
+        <div class="top-actions">
+          <button type="button" id="btnClearAll" class="inst-btn">全部清空</button>
+        </div>
+      </header>
+
+      <!-- Dose V.S. Time 主面板 -->
+      <div class="dose-time-box">
+        <span class="box-legend">Dose V.S. Time</span>
+
+        <!-- 核種與半衰期設定列 -->
+        <div class="isotope-row">
+          <label class="control-inline" for="isotopeSelect">
+            <span>核種:</span>
+            <select id="isotopeSelect" class="inst-select">
+              <option value="F-18" selected>F-18</option>
+              <option value="I-131">I-131</option>
+              <option value="Tl-201">Tl-201</option>
+              <option value="Tc-99m">Tc-99m</option>
+              <option value="Ga-68">Ga-68</option>
+              <option value="C-11">C-11</option>
+              <option value="CUSTOM">自訂</option>
+            </select>
+          </label>
+
+          <label class="control-inline" for="inputHalfTime">
+            <span>HalfTime=</span>
+            <input
+              id="inputHalfTime"
+              type="number"
+              step="any"
+              min="0.0001"
+              value="109.74"
+              class="halflife-input tabular-nums"
+            />
+            <span style="font-size:0.76rem;color:var(--text-muted);font-weight:500;">min</span>
+          </label>
+
+          <div id="halfTimeRefNote" class="field-hint" style="width:100%;">
+            目前半衰期換算：109.74 min ≈ 1.8290 hr ≈ 0.07621 days
+          </div>
+        </div>
+
+        <!-- 直式單欄主流程：上方（Time1 + Dose1）→ 中間（↓ / ↑ / ⇅）→ 下方（Time2 + Dose2） -->
+        <div class="vertical-flow">
+          <!-- 上方群組：Time1 與 Dose 1 -->
+          <section id="cardTop" class="group-card">
+            <div class="group-header">
+              <h2 class="group-title">起始點（1）<span class="group-sub">Date1 / Time1 與 Dose 1</span></h2>
+            </div>
+
+            <!-- 主欄位 1：Date1 + Time1 -->
+            <div class="field-block">
+              <div class="field-label-row">
+                <label for="inputTime1" class="field-label">日期與 Time1（HHMM）</label>
+                <div style="display:inline-flex;align-items:center;gap:6px;">
+                  <button type="button" id="btnToday1" class="today-mini-btn" title="將日期 1 設為今天">今天</button>
+                  <span id="badgeTime1" class="computed-badge">自動計算</span>
+                </div>
+              </div>
+              <div class="datetime-row">
+                <input
+                  id="inputDate1"
+                  type="date"
+                  aria-label="Date 1"
+                  class="date-input tabular-nums"
+                />
+                <input
+                  id="inputTime1"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="4"
+                  placeholder="0800"
+                  autocomplete="off"
+                  class="time-input tabular-nums"
+                />
+              </div>
+              <div id="hintTime1" class="field-hint">日期預設今天；時間輸入 0000–2359（支援 3 位數如 800）</div>
+            </div>
+
+            <!-- 主欄位 2：Dose 1（MBq 與 mCi 雙向同步） -->
+            <div class="field-block">
+              <div class="field-label-row">
+                <span class="field-label">Dose 1（活度 1）</span>
+                <span id="badgeDose1" class="computed-badge">自動計算</span>
+              </div>
+              <div class="dose-stack">
+                <div class="dose-row">
+                  <input
+                    id="inputDose1Mbq"
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0.00"
+                    autocomplete="off"
+                    aria-label="Dose 1 MBq"
+                    class="dose-input mbq-field tabular-nums"
+                  />
+                  <span class="unit-tag">MBq</span>
+                </div>
+                <div class="dose-row">
+                  <input
+                    id="inputDose1Mci"
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0.00"
+                    autocomplete="off"
+                    aria-label="Dose 1 mCi"
+                    class="dose-input mci-field tabular-nums"
+                  />
+                  <span class="unit-tag">mCi</span>
+                </div>
+              </div>
+              <div id="hintDose1" class="field-hint">MBq 與 mCi 自動同步（1 mCi = 37 MBq）</div>
+            </div>
+          </section>
+
+          <!-- 上下方向控制列：↓ 往下推算、↑ 往上回推、⇅ 上下交換 -->
+          <div class="direction-bar" role="group" aria-label="上下方向推算與交換">
+            <button type="button" id="btnCalcDown" class="dir-btn" title="由上方往下推算下方欄位">
+              <span class="dir-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <line x1="12" y1="4" x2="12" y2="20"></line>
+                  <polyline points="6 14 12 20 18 14"></polyline>
+                </svg>
+              </span>
+              <span>往下推算</span>
+            </button>
+            <button type="button" id="btnCalcUp" class="dir-btn" title="由下方往上回推上方欄位">
+              <span class="dir-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <polyline points="6 10 12 4 18 10"></polyline>
+                </svg>
+              </span>
+              <span>往上回推</span>
+            </button>
+            <button type="button" id="btnSwapTopBottom" class="dir-btn" title="交換上方（1）與下方（2）數值">
+              <span class="dir-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <line x1="8" y1="4" x2="8" y2="17"></line>
+                  <polyline points="4 13 8 17 12 13"></polyline>
+                  <line x1="16" y1="20" x2="16" y2="7"></line>
+                  <polyline points="12 11 16 7 20 11"></polyline>
+                </svg>
+              </span>
+              <span>上下交換</span>
+            </button>
+          </div>
+
+          <!-- 下方群組：Time2 與 Dose 2 -->
+          <section id="cardBottom" class="group-card">
+            <div class="group-header">
+              <h2 class="group-title">目標點（2）<span class="group-sub">Date2 / Time2 與 Dose 2</span></h2>
+            </div>
+
+            <!-- 主欄位 3：Date2 + Time2 -->
+            <div class="field-block">
+              <div class="field-label-row">
+                <label for="inputTime2" class="field-label">日期與 Time2（HHMM）</label>
+                <div style="display:inline-flex;align-items:center;gap:6px;">
+                  <button type="button" id="btnToday2" class="today-mini-btn" title="將日期 2 設為今天">今天</button>
+                  <span id="badgeTime2" class="computed-badge">自動計算</span>
+                </div>
+              </div>
+              <div class="datetime-row">
+                <input
+                  id="inputDate2"
+                  type="date"
+                  aria-label="Date 2"
+                  class="date-input tabular-nums"
+                />
+                <input
+                  id="inputTime2"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="4"
+                  placeholder="1200"
+                  autocomplete="off"
+                  class="time-input tabular-nums"
+                />
+              </div>
+              <div id="hintTime2" class="field-hint">同日若早於 Time1 自動視為跨午夜；跨日請直接選取日期</div>
+            </div>
+
+            <!-- 主欄位 4：Dose 2（MBq 與 mCi 雙向同步） -->
+            <div class="field-block">
+              <div class="field-label-row">
+                <span class="field-label">Dose 2（活度 2）</span>
+                <span id="badgeDose2" class="computed-badge">自動計算</span>
+              </div>
+              <div class="dose-stack">
+                <div class="dose-row">
+                  <input
+                    id="inputDose2Mbq"
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0.00"
+                    autocomplete="off"
+                    aria-label="Dose 2 MBq"
+                    class="dose-input mbq-field tabular-nums"
+                  />
+                  <span class="unit-tag">MBq</span>
+                </div>
+                <div class="dose-row">
+                  <input
+                    id="inputDose2Mci"
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0.00"
+                    autocomplete="off"
+                    aria-label="Dose 2 mCi"
+                    class="dose-input mci-field tabular-nums"
+                  />
+                  <span class="unit-tag">mCi</span>
+                </div>
+              </div>
+              <div id="hintDose2" class="field-hint">MBq 與 mCi 自動同步（1 mCi = 37 MBq）</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 計算指標摘要 -->
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-label">經過時間 Δt</div>
+            <div id="metricDeltaT" class="metric-value tabular-nums">—</div>
+            <div id="metricDeltaTSub" class="metric-sub">等待計算</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">衰變因子 e^(-λ·Δt)</div>
+            <div id="metricDecay" class="metric-value tabular-nums">—</div>
+            <div id="metricDecaySub" class="metric-sub">正向剩餘比例</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">回推倍數 e^(λ·Δt)</div>
+            <div id="metricBack" class="metric-value tabular-nums">—</div>
+            <div id="metricBackSub" class="metric-sub">逆向回推倍率</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">衰變常數 λ = ln(2) / T½</div>
+            <div id="metricLambda" class="metric-value tabular-nums">—</div>
+            <div id="metricLambdaSub" class="metric-sub">HalfTime = 109.74 min</div>
+          </div>
+        </div>
+
+        <!-- 公式與單位基準說明 -->
+        <div class="formula-note">
+          <div>
+            <code>Dose2 = Dose1 · exp(-λ·Δt)</code> ·
+            <code>Dose1 = Dose2 · exp(λ·Δt)</code> ·
+            <code>Δt = ln(Dose1 / Dose2) / λ</code>
+          </div>
+          <div>單位換算：<code>1 mCi = 37 MBq</code>（1 MBq = 1/37 mCi）</div>
+        </div>
+      </div>
+
+      <!-- 狀態列 -->
+      <div id="statusPanel" class="status-panel" role="status" aria-live="polite">
+        <div id="statusTitle" class="status-title">就緒：任填 3 個主欄位自動算第 4 個欄位</div>
+        <div id="statusDetail" class="status-detail">所有欄位皆可隨時自由輸入與修改，不會被鎖定。</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var MBQ_PER_MCI = 37;
+      var DEFAULT_HALF_TIME = 109.74;
+      var MINS_PER_DAY = 1440;
+      var MS_PER_DAY = 86400000;
+
+      // 核種半衰期對照表（分鐘 min）
+      // I-131: 8.0249 days * 1440 = 11555.856 min
+      // Tl-201: 72.91 hours * 60 = 4374.6 min
+      var ISOTOPE_HALF_TIMES = {
+        'F-18': 109.74,
+        'I-131': 11555.856,
+        'Tl-201': 4374.6,
+        'Tc-99m': 360.9,
+        'Ga-68': 67.71,
+        'C-11': 20.364
+      };
+
+      // 重入防護旗標：防止程式寫入輸入框時造成無限迴圈
+      var isUpdating = false;
+
+      // 追蹤目前由程式自動填寫的欄位：'time1' | 'time2' | 'dose1' | 'dose2' | null
+      var lastComputedField = null;
+
+      var dom = {
+        isotopeSelect: document.getElementById('isotopeSelect'),
+        inputHalfTime: document.getElementById('inputHalfTime'),
+        halfTimeRefNote: document.getElementById('halfTimeRefNote'),
+
+        inputDate1: document.getElementById('inputDate1'),
+        inputTime1: document.getElementById('inputTime1'),
+        btnToday1: document.getElementById('btnToday1'),
+
+        inputDate2: document.getElementById('inputDate2'),
+        inputTime2: document.getElementById('inputTime2'),
+        btnToday2: document.getElementById('btnToday2'),
+
+        inputDose1Mbq: document.getElementById('inputDose1Mbq'),
+        inputDose1Mci: document.getElementById('inputDose1Mci'),
+        inputDose2Mbq: document.getElementById('inputDose2Mbq'),
+        inputDose2Mci: document.getElementById('inputDose2Mci'),
+
+        cardTop: document.getElementById('cardTop'),
+        cardBottom: document.getElementById('cardBottom'),
+
+        badgeTime1: document.getElementById('badgeTime1'),
+        badgeTime2: document.getElementById('badgeTime2'),
+        badgeDose1: document.getElementById('badgeDose1'),
+        badgeDose2: document.getElementById('badgeDose2'),
+
+        hintTime1: document.getElementById('hintTime1'),
+        hintTime2: document.getElementById('hintTime2'),
+        hintDose1: document.getElementById('hintDose1'),
+        hintDose2: document.getElementById('hintDose2'),
+
+        btnCalcDown: document.getElementById('btnCalcDown'),
+        btnCalcUp: document.getElementById('btnCalcUp'),
+        btnSwapTopBottom: document.getElementById('btnSwapTopBottom'),
+        btnClearAll: document.getElementById('btnClearAll'),
+
+        metricDeltaT: document.getElementById('metricDeltaT'),
+        metricDeltaTSub: document.getElementById('metricDeltaTSub'),
+        metricDecay: document.getElementById('metricDecay'),
+        metricDecaySub: document.getElementById('metricDecaySub'),
+        metricBack: document.getElementById('metricBack'),
+        metricBackSub: document.getElementById('metricBackSub'),
+        metricLambda: document.getElementById('metricLambda'),
+        metricLambdaSub: document.getElementById('metricLambdaSub'),
+
+        statusPanel: document.getElementById('statusPanel'),
+        statusTitle: document.getElementById('statusTitle'),
+        statusDetail: document.getElementById('statusDetail')
+      };
+
+      // ========================================================================
+      // 1. 日期與時間工具函式
+      // ========================================================================
+
+      function pad2(n) {
+        return (n < 10 ? '0' : '') + String(n);
+      }
+
+      // 取得使用者本機今天日期字串 YYYY-MM-DD
+      function getLocalTodayStr() {
+        var now = new Date();
+        return now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+      }
+
+      // 解析 YYYY-MM-DD 為 UTC 曆日編號（自 1970-01-01 起算的天數），避免日光節約時間誤差
+      function parseDateToUtcDay(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string') return null;
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+        if (!m) return null;
+        var y = parseInt(m[1], 10);
+        var mo = parseInt(m[2], 10);
+        var d = parseInt(m[3], 10);
+        if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+        var utcMs = Date.UTC(y, mo - 1, d);
+        var check = new Date(utcMs);
+        if (check.getUTCFullYear() !== y || check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d) {
+          return null;
+        }
+        return Math.floor(utcMs / MS_PER_DAY);
+      }
+
+      // 將總分鐘數（自 1970-01-01 00:00 UTC 曆日起算）轉回 { dateStr, hhmm, minutesOfDay }
+      function epochMinutesToDateAndTime(totalEpochMinutes) {
+        var dayIndex = Math.floor(totalEpochMinutes / MINS_PER_DAY);
+        var modMin = ((totalEpochMinutes % MINS_PER_DAY) + MINS_PER_DAY) % MINS_PER_DAY;
+        var dt = new Date(dayIndex * MS_PER_DAY);
+        var dateStr =
+          dt.getUTCFullYear() + '-' + pad2(dt.getUTCMonth() + 1) + '-' + pad2(dt.getUTCDate());
+        var hh = Math.floor(modMin / 60);
+        var mm = modMin % 60;
+        var hhmm = pad2(hh) + pad2(mm);
+        return {
+          dateStr: dateStr,
+          hhmm: hhmm,
+          minutesOfDay: modMin
+        };
+      }
+
+      // 解析 HHMM 時間欄位（允許 3 位數如 800 或 4 位數如 0800）
+      function parseTimeField(rawValue) {
+        var trimmed = String(rawValue == null ? '' : rawValue).trim();
+        if (trimmed === '') {
+          return { present: false, valid: false, minutes: null, formatted: '', error: '' };
+        }
+        if (!/^\d+$/.test(trimmed)) {
+          return {
+            present: true,
+            valid: false,
+            minutes: null,
+            formatted: '',
+            error: '時間請輸入純數字 HHMM（例如 0800）'
+          };
+        }
+        if (trimmed.length < 3 || trimmed.length > 4) {
+          return {
+            present: true,
+            valid: false,
+            minutes: null,
+            formatted: '',
+            error: '請輸入 3 或 4 位數時間（例如 800 或 0800）'
+          };
+        }
+        var padded = trimmed.length === 3 ? '0' + trimmed : trimmed;
+        var hh = parseInt(padded.slice(0, 2), 10);
+        var mm = parseInt(padded.slice(2, 4), 10);
+        if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+          return {
+            present: true,
+            valid: false,
+            minutes: null,
+            formatted: '',
+            error: '小時需為 00–23，分鐘需為 00–59'
+          };
+        }
+        return {
+          present: true,
+          valid: true,
+          minutes: hh * 60 + mm,
+          formatted: padded,
+          error: ''
+        };
+      }
+
+      // 取得有效日期（若日期欄位為空，回傳本機今天日期；僅在 writeIfEmpty=true 且非輸入中才寫回）
+      function resolveDateStr(dateInputEl, writeIfEmpty) {
+        var raw = String(dateInputEl && dateInputEl.value ? dateInputEl.value : '').trim();
+        if (parseDateToUtcDay(raw) !== null) {
+          return raw;
+        }
+        var today = getLocalTodayStr();
+        if (writeIfEmpty && dateInputEl) {
+          var prev = isUpdating;
+          isUpdating = true;
+          try {
+            dateInputEl.value = today;
+          } finally {
+            isUpdating = prev;
+          }
+        }
+        return today;
+      }
+
+      // 計算 (Date1, Time1) 到 (Date2, Time2) 的經過分鐘數 Δt
+      function computeElapsedMinutes(date1Str, t1Min, date2Str, t2Min) {
+        var day1 = parseDateToUtcDay(date1Str);
+        var day2 = parseDateToUtcDay(date2Str);
+        if (day1 === null || day2 === null) {
+          return { valid: false, dt: 0, wrappedMidnight: false, dayDiff: 0 };
+        }
+        var dayDiff = day2 - day1;
+        // 規則 1：同一天且 Time2 < Time1 -> 自動視為跨午夜（+1440 分鐘）
+        if (dayDiff === 0 && t2Min < t1Min) {
+          var dtWrap = MINS_PER_DAY - t1Min + t2Min;
+          return {
+            valid: true,
+            dt: dtWrap,
+            wrappedMidnight: true,
+            dayDiff: 0
+          };
+        }
+        // 規則 2：精確曆日差 + 時間差
+        var rawDt = dayDiff * MINS_PER_DAY + (t2Min - t1Min);
+        if (rawDt < 0) {
+          return {
+            valid: false,
+            dt: rawDt,
+            wrappedMidnight: false,
+            dayDiff: dayDiff
+          };
+        }
+        return {
+          valid: true,
+          dt: rawDt,
+          wrappedMidnight: false,
+          dayDiff: dayDiff
+        };
+      }
+
+      // 格式化經過分鐘數為易讀文字（含天/小時/分鐘拆解）
+      function formatDurationBreakdown(totalMinutes) {
+        var rounded = Math.round(totalMinutes);
+        var days = Math.floor(rounded / MINS_PER_DAY);
+        var remAfterDays = rounded % MINS_PER_DAY;
+        var hours = Math.floor(remAfterDays / 60);
+        var mins = remAfterDays % 60;
+        var parts = [];
+        if (days > 0) parts.push(days + ' 天');
+        if (hours > 0 || days > 0) parts.push(hours + ' 小時');
+        parts.push(mins + ' 分');
+        return parts.join(' ');
+      }
+
+      // ========================================================================
+      // 2. 活度與半衰期解析與格式化
+      // ========================================================================
+
+      function formatNumberClean(val, decimals) {
+        if (!isFinite(val)) return '';
+        var fixed = val.toFixed(decimals);
+        // 保留至少 2 位小數以維持儀表板整潔，去除多餘尾零
+        return fixed.replace(/(\.\d{2,}?)0+$/, '$1');
+      }
+
+      function readDoseField(mbqEl, mciEl, label) {
+        var rawMbq = String(mbqEl.value == null ? '' : mbqEl.value).trim();
+        var rawMci = String(mciEl.value == null ? '' : mciEl.value).trim();
+
+        if (rawMbq === '' && rawMci === '') {
+          return { present: false, valid: false, mbq: null, mci: null, error: '' };
+        }
+
+        if (rawMbq !== '') {
+          var numMbq = Number(rawMbq);
+          if (!isFinite(numMbq) || numMbq <= 0) {
+            return {
+              present: true,
+              valid: false,
+              mbq: null,
+              mci: null,
+              error: label + '（MBq）需為大於 0 的數字'
+            };
+          }
+          return {
+            present: true,
+            valid: true,
+            mbq: numMbq,
+            mci: numMbq / MBQ_PER_MCI,
+            error: ''
+          };
+        }
+
+        var numMci = Number(rawMci);
+        if (!isFinite(numMci) || numMci <= 0) {
+          return {
+            present: true,
+            valid: false,
+            mbq: null,
+            mci: null,
+            error: label + '（mCi）需為大於 0 的數字'
+          };
+        }
+        return {
+          present: true,
+          valid: true,
+          mbq: numMci * MBQ_PER_MCI,
+          mci: numMci,
+          error: ''
+        };
+      }
+
+      function readHalfTime() {
+        var raw = String(dom.inputHalfTime.value == null ? '' : dom.inputHalfTime.value).trim();
+        var val = Number(raw);
+        if (!raw || !isFinite(val) || val <= 0) {
+          return { valid: false, halfTime: DEFAULT_HALF_TIME, lambda: Math.LN2 / DEFAULT_HALF_TIME };
+        }
+        return { valid: true, halfTime: val, lambda: Math.LN2 / val };
+      }
+
+      function updateHalfTimeDisplay() {
+        var htInfo = readHalfTime();
+        if (!htInfo.valid) {
+          dom.halfTimeRefNote.textContent = '請輸入大於 0 的半衰期（分鐘）';
+          dom.halfTimeRefNote.classList.add('error');
+          return;
+        }
+        dom.halfTimeRefNote.classList.remove('error');
+        var minVal = htInfo.halfTime;
+        var hrVal = minVal / 60;
+        var dayVal = minVal / MINS_PER_DAY;
+        dom.halfTimeRefNote.textContent =
+          '目前半衰期換算：' +
+          formatNumberClean(minVal, 3) +
+          ' min ≈ ' +
+          hrVal.toFixed(4).replace(/\.?0+$/, '') +
+          ' hr ≈ ' +
+          dayVal.toFixed(5).replace(/\.?0+$/, '') +
+          ' days';
+      }
+
+      // ========================================================================
+      // 3. UI 視覺狀態與標記管理
+      // ========================================================================
+
+      function clearComputedVisuals() {
+        lastComputedField = null;
+        dom.cardTop.classList.remove('has-computed');
+        dom.cardBottom.classList.remove('has-computed');
+
+        dom.badgeTime1.classList.remove('visible');
+        dom.badgeTime2.classList.remove('visible');
+        dom.badgeDose1.classList.remove('visible');
+        dom.badgeDose2.classList.remove('visible');
+
+        dom.inputDate1.classList.remove('computed-field');
+        dom.inputTime1.classList.remove('computed-field');
+        dom.inputDate2.classList.remove('computed-field');
+        dom.inputTime2.classList.remove('computed-field');
+        dom.inputDose1Mbq.classList.remove('computed-field');
+        dom.inputDose1Mci.classList.remove('computed-field');
+        dom.inputDose2Mbq.classList.remove('computed-field');
+        dom.inputDose2Mci.classList.remove('computed-field');
+      }
+
+      function setComputedFieldHighlight(fieldKey) {
+        clearComputedVisuals();
+        lastComputedField = fieldKey;
+
+        if (fieldKey === 'time1') {
+          dom.cardTop.classList.add('has-computed');
+          dom.badgeTime1.classList.add('visible');
+          dom.inputDate1.classList.add('computed-field');
+          dom.inputTime1.classList.add('computed-field');
+        } else if (fieldKey === 'dose1') {
+          dom.cardTop.classList.add('has-computed');
+          dom.badgeDose1.classList.add('visible');
+          dom.inputDose1Mbq.classList.add('computed-field');
+          dom.inputDose1Mci.classList.add('computed-field');
+        } else if (fieldKey === 'time2') {
+          dom.cardBottom.classList.add('has-computed');
+          dom.badgeTime2.classList.add('visible');
+          dom.inputDate2.classList.add('computed-field');
+          dom.inputTime2.classList.add('computed-field');
+        } else if (fieldKey === 'dose2') {
+          dom.cardBottom.classList.add('has-computed');
+          dom.badgeDose2.classList.add('visible');
+          dom.inputDose2Mbq.classList.add('computed-field');
+          dom.inputDose2Mci.classList.add('computed-field');
+        }
+      }
+
+      // 清除上一次自動計算填入的數值（當使用者修改其他已填欄位或切換核種時呼叫）
+      function wipePreviousComputedValue() {
+        if (!lastComputedField) return;
+        var prevTarget = lastComputedField;
+        var prevSync = isUpdating;
+        isUpdating = true;
+        try {
+          if (prevTarget === 'time1') {
+            dom.inputTime1.value = '';
+          } else if (prevTarget === 'time2') {
+            dom.inputTime2.value = '';
+          } else if (prevTarget === 'dose1') {
+            dom.inputDose1Mbq.value = '';
+            dom.inputDose1Mci.value = '';
+          } else if (prevTarget === 'dose2') {
+            dom.inputDose2Mbq.value = '';
+            dom.inputDose2Mci.value = '';
+          }
+          clearComputedVisuals();
+        } finally {
+          isUpdating = prevSync;
+        }
+      }
+
+      function setStatus(type, title, detail) {
+        dom.statusPanel.className = 'status-panel';
+        if (type === 'success') dom.statusPanel.classList.add('is-success');
+        else if (type === 'warn') dom.statusPanel.classList.add('is-warn');
+        else if (type === 'error') dom.statusPanel.classList.add('is-error');
+
+        dom.statusTitle.textContent = title;
+        dom.statusDetail.textContent = detail || '';
+      }
+
+      function resetMetrics(halfTimeVal, lambdaVal) {
+        dom.metricDeltaT.textContent = '—';
+        dom.metricDeltaTSub.textContent = '等待計算';
+        dom.metricDecay.textContent = '—';
+        dom.metricDecaySub.textContent = '正向剩餘比例';
+        dom.metricBack.textContent = '—';
+        dom.metricBackSub.textContent = '逆向回推倍率';
+        if (isFinite(halfTimeVal) && halfTimeVal > 0) {
+          dom.metricLambda.textContent = lambdaVal.toExponential(4) + ' min⁻¹';
+          dom.metricLambdaSub.textContent = 'HalfTime = ' + formatNumberClean(halfTimeVal, 3) + ' min';
+        } else {
+          dom.metricLambda.textContent = '—';
+          dom.metricLambdaSub.textContent = '請檢查半衰期';
+        }
+      }
+
+      function updateMetrics(dtMinutes, spanText, decayFactor, backFactor, lambdaVal, halfTimeVal) {
+        var roundedDt = Math.round(dtMinutes);
+        var isExactInt = Math.abs(dtMinutes - roundedDt) < 0.01;
+        dom.metricDeltaT.textContent =
+          (isExactInt ? String(roundedDt) : dtMinutes.toFixed(1)) +
+          ' min (' +
+          formatDurationBreakdown(dtMinutes) +
+          ')';
+        dom.metricDeltaTSub.textContent = spanText;
+
+        dom.metricDecay.textContent = decayFactor.toFixed(6);
+        dom.metricDecaySub.textContent = '剩餘 ' + (decayFactor * 100).toFixed(2) + '%';
+
+        dom.metricBack.textContent = backFactor.toFixed(6) + '×';
+        dom.metricBackSub.textContent = '回推倍率';
+
+        dom.metricLambda.textContent = lambdaVal.toExponential(4) + ' min⁻¹';
+        dom.metricLambdaSub.textContent = 'HalfTime = ' + formatNumberClean(halfTimeVal, 3) + ' min';
+      }
+
+      function updateFieldHints(t1, t2, d1, d2) {
+        if (t1.present && !t1.valid) {
+          dom.hintTime1.textContent = t1.error;
+          dom.hintTime1.classList.add('error');
+        } else {
+          dom.hintTime1.textContent = '日期預設今天；時間輸入 0000–2359（支援 3 位數如 800）';
+          dom.hintTime1.classList.remove('error');
+        }
+
+        if (t2.present && !t2.valid) {
+          dom.hintTime2.textContent = t2.error;
+          dom.hintTime2.classList.add('error');
+        } else {
+          dom.hintTime2.textContent = '同日若早於 Time1 自動視為跨午夜；跨日請直接選取日期';
+          dom.hintTime2.classList.remove('error');
+        }
+
+        if (d1.present && !d1.valid) {
+          dom.hintDose1.textContent = d1.error;
+          dom.hintDose1.classList.add('error');
+        } else {
+          dom.hintDose1.textContent = 'MBq 與 mCi 自動同步（1 mCi = 37 MBq）';
+          dom.hintDose1.classList.remove('error');
+        }
+
+        if (d2.present && !d2.valid) {
+          dom.hintDose2.textContent = d2.error;
+          dom.hintDose2.classList.add('error');
+        } else {
+          dom.hintDose2.textContent = 'MBq 與 mCi 自動同步（1 mCi = 37 MBq）';
+          dom.hintDose2.classList.remove('error');
+        }
+      }
+
+      // ========================================================================
+      // 4. 核心計算引擎（支援指定目標欄位計算與任填三求一自動計算）
+      // ========================================================================
+
+      function solveTarget(targetKey) {
+        var ht = readHalfTime();
+        if (!ht.valid) {
+          resetMetrics(NaN, NaN);
+          setStatus('error', 'HalfTime 無效', '請輸入大於 0 的半衰期（分鐘）。');
+          return false;
+        }
+
+        var d1Date = resolveDateStr(dom.inputDate1, false);
+        var d2Date = resolveDateStr(dom.inputDate2, false);
+        var t1 = parseTimeField(dom.inputTime1.value);
+        var t2 = parseTimeField(dom.inputTime2.value);
+        var d1 = readDoseField(dom.inputDose1Mbq, dom.inputDose1Mci, 'Dose 1');
+        var d2 = readDoseField(dom.inputDose2Mbq, dom.inputDose2Mci, 'Dose 2');
+
+        updateFieldHints(t1, t2, d1, d2);
+
+        var lambda = ht.lambda;
+        var halfTime = ht.halfTime;
+
+        isUpdating = true;
+        try {
+          // 情境 A：已知 (Date1, Time1), (Date2, Time2), Dose 1 -> 計算 Dose 2
+          if (targetKey === 'dose2') {
+            if (!t1.valid || !t2.valid || !d1.valid) return false;
+            var elapsedA = computeElapsedMinutes(d1Date, t1.minutes, d2Date, t2.minutes);
+            if (!elapsedA.valid) {
+              resetMetrics(halfTime, lambda);
+              setStatus(
+                'error',
+                '日期順序有誤：Date2 早於 Date1',
+                '目標日期（' + d2Date + ' ' + t2.formatted + '）早於起始日期（' + d1Date + ' ' + t1.formatted + '），請調整日期或點選「今天」。'
+              );
+              return false;
+            }
+            var dtA = elapsedA.dt;
+            var decayA = Math.exp(-lambda * dtA);
+            var backA = Math.exp(lambda * dtA);
+            var res2Mbq = d1.mbq * decayA;
+            var res2Mci = res2Mbq / MBQ_PER_MCI;
+
+            dom.inputDose2Mbq.value = formatNumberClean(res2Mbq, 2);
+            dom.inputDose2Mci.value = formatNumberClean(res2Mci, 2);
+            setComputedFieldHighlight('dose2');
+
+            var spanA =
+              d1Date + ' ' + t1.formatted + ' → ' + d2Date + ' ' + t2.formatted +
+              (elapsedA.wrappedMidnight ? '（跨午夜）' : '');
+            updateMetrics(dtA, spanA, decayA, backA, lambda, halfTime);
+            setStatus(
+              'success',
+              '已推算 Dose 2 = ' + formatNumberClean(res2Mbq, 2) + ' MBq（' + formatNumberClean(res2Mci, 2) + ' mCi）',
+              '經過時間 Δt = ' + dtA + ' min（' + formatDurationBreakdown(dtA) + '），衰變因子 = ' + decayA.toFixed(6)
+            );
+            return true;
+          }
+
+          // 情境 B：已知 (Date1, Time1), (Date2, Time2), Dose 2 -> 回推 Dose 1
+          if (targetKey === 'dose1') {
+            if (!t1.valid || !t2.valid || !d2.valid) return false;
+            var elapsedB = computeElapsedMinutes(d1Date, t1.minutes, d2Date, t2.minutes);
+            if (!elapsedB.valid) {
+              resetMetrics(halfTime, lambda);
+              setStatus(
+                'error',
+                '日期順序有誤：Date2 早於 Date1',
+                '目標日期（' + d2Date + ' ' + t2.formatted + '）早於起始日期（' + d1Date + ' ' + t1.formatted + '），請調整日期或點選「今天」。'
+              );
+              return false;
+            }
+            var dtB = elapsedB.dt;
+            var decayB = Math.exp(-lambda * dtB);
+            var backB = Math.exp(lambda * dtB);
+            var res1Mbq = d2.mbq * backB;
+            var res1Mci = res1Mbq / MBQ_PER_MCI;
+
+            dom.inputDose1Mbq.value = formatNumberClean(res1Mbq, 2);
+            dom.inputDose1Mci.value = formatNumberClean(res1Mci, 2);
+            setComputedFieldHighlight('dose1');
+
+            var spanB =
+              d1Date + ' ' + t1.formatted + ' → ' + d2Date + ' ' + t2.formatted +
+              (elapsedB.wrappedMidnight ? '（跨午夜）' : '');
+            updateMetrics(dtB, spanB, decayB, backB, lambda, halfTime);
+            setStatus(
+              'success',
+              '已回推 Dose 1 = ' + formatNumberClean(res1Mbq, 2) + ' MBq（' + formatNumberClean(res1Mci, 2) + ' mCi）',
+              '經過時間 Δt = ' + dtB + ' min（' + formatDurationBreakdown(dtB) + '），回推倍數 = ' + backB.toFixed(6) + '×'
+            );
+            return true;
+          }
+
+          // 情境 C：已知 (Date1, Time1), Dose 1, Dose 2 -> 推算目標 (Date2, Time2)
+          if (targetKey === 'time2') {
+            if (!t1.valid || !d1.valid || !d2.valid) return false;
+            if (d1.mbq <= d2.mbq) {
+              resetMetrics(halfTime, lambda);
+              setStatus(
+                'warn',
+                '無法推算未來時間：Dose 1 必須大於 Dose 2',
+                '放射性活度隨時間衰減，正向推算 Time2 時 Dose 1（目前 ' +
+                  formatNumberClean(d1.mbq, 2) +
+                  ' MBq）需大於 Dose 2（目前 ' +
+                  formatNumberClean(d2.mbq, 2) +
+                  ' MBq）。若要逆向回推較早時間，請按「⇅ 上下交換」。'
+              );
+              return false;
+            }
+            var dtExactC = Math.log(d1.mbq / d2.mbq) / lambda;
+            var dtRoundC = Math.round(dtExactC);
+            var day1Utc = parseDateToUtcDay(d1Date);
+            if (day1Utc === null) {
+              d1Date = getLocalTodayStr();
+              day1Utc = parseDateToUtcDay(d1Date);
+              dom.inputDate1.value = d1Date;
+            }
+            var startTotalMins = day1Utc * MINS_PER_DAY + t1.minutes;
+            var endTotalMins = startTotalMins + dtRoundC;
+            var resolved2 = epochMinutesToDateAndTime(endTotalMins);
+
+            var decayC = Math.exp(-lambda * dtExactC);
+            var backC = Math.exp(lambda * dtExactC);
+
+            dom.inputDate2.value = resolved2.dateStr;
+            dom.inputTime2.value = resolved2.hhmm;
+            setComputedFieldHighlight('time2');
+
+            var spanC = d1Date + ' ' + t1.formatted + ' → ' + resolved2.dateStr + ' ' + resolved2.hhmm;
+            updateMetrics(dtExactC, spanC, decayC, backC, lambda, halfTime);
+            setStatus(
+              'success',
+              '已推算目標時間：' + resolved2.dateStr + ' ' + resolved2.hhmm,
+              '經過時間 Δt ≈ ' + dtExactC.toFixed(1) + ' min（' + formatDurationBreakdown(dtExactC) + '）'
+            );
+            return true;
+          }
+
+          // 情境 D：已知 (Date2, Time2), Dose 1, Dose 2 -> 回推起始 (Date1, Time1)
+          if (targetKey === 'time1') {
+            if (!t2.valid || !d1.valid || !d2.valid) return false;
+            if (d1.mbq <= d2.mbq) {
+              resetMetrics(halfTime, lambda);
+              setStatus(
+                'warn',
+                '無法回推起始時間：Dose 1 必須大於 Dose 2',
+                '起始活度 Dose 1（目前 ' +
+                  formatNumberClean(d1.mbq, 2) +
+                  ' MBq）需大於目標活度 Dose 2（目前 ' +
+                  formatNumberClean(d2.mbq, 2) +
+                  ' MBq）才能回推較早的 Time1。'
+              );
+              return false;
+            }
+            var dtExactD = Math.log(d1.mbq / d2.mbq) / lambda;
+            var dtRoundD = Math.round(dtExactD);
+            var day2Utc = parseDateToUtcDay(d2Date);
+            if (day2Utc === null) {
+              d2Date = getLocalTodayStr();
+              day2Utc = parseDateToUtcDay(d2Date);
+              dom.inputDate2.value = d2Date;
+            }
+            var endTotalMinsD = day2Utc * MINS_PER_DAY + t2.minutes;
+            var startTotalMinsD = endTotalMinsD - dtRoundD;
+            var resolved1 = epochMinutesToDateAndTime(startTotalMinsD);
+
+            var decayD = Math.exp(-lambda * dtExactD);
+            var backD = Math.exp(lambda * dtExactD);
+
+            dom.inputDate1.value = resolved1.dateStr;
+            dom.inputTime1.value = resolved1.hhmm;
+            setComputedFieldHighlight('time1');
+
+            var spanD = resolved1.dateStr + ' ' + resolved1.hhmm + ' → ' + d2Date + ' ' + t2.formatted;
+            updateMetrics(dtExactD, spanD, decayD, backD, lambda, halfTime);
+            setStatus(
+              'success',
+              '已回推起始時間：' + resolved1.dateStr + ' ' + resolved1.hhmm,
+              '經過時間 Δt ≈ ' + dtExactD.toFixed(1) + ' min（' + formatDurationBreakdown(dtExactD) + '）'
+            );
+            return true;
+          }
+        } finally {
+          isUpdating = false;
+        }
+        return false;
+      }
+
+      // 自動檢查四個主欄位狀態：若恰有 3 個有效、1 個空白，自動算出第 4 個欄位
+      function evaluateAutoSolve() {
+        if (isUpdating) return;
+
+        var ht = readHalfTime();
+        var t1 = parseTimeField(dom.inputTime1.value);
+        var t2 = parseTimeField(dom.inputTime2.value);
+        var d1 = readDoseField(dom.inputDose1Mbq, dom.inputDose1Mci, 'Dose 1');
+        var d2 = readDoseField(dom.inputDose2Mbq, dom.inputDose2Mci, 'Dose 2');
+
+        updateFieldHints(t1, t2, d1, d2);
+
+        if (!ht.valid) {
+          resetMetrics(NaN, NaN);
+          setStatus('error', '半衰期數值無效', '請輸入大於 0 的 HalfTime（分鐘）。');
+          return;
+        }
+
+        // 若有任一已填欄位格式錯誤（例如時間輸入超過 2359 或活度 <= 0），先顯示錯誤提示
+        if ((t1.present && !t1.valid) || (t2.present && !t2.valid) || (d1.present && !d1.valid) || (d2.present && !d2.valid)) {
+          resetMetrics(ht.halfTime, ht.lambda);
+          var firstErr =
+            (t1.present && !t1.valid && t1.error) ||
+            (t2.present && !t2.valid && t2.error) ||
+            (d1.present && !d1.valid && d1.error) ||
+            (d2.present && !d2.valid && d2.error);
+          setStatus('error', '輸入格式有誤', firstErr);
+          return;
+        }
+
+        var presentKeys = [];
+        var missingKeys = [];
+        var statusMap = {
+          time1: t1.present,
+          dose1: d1.present,
+          time2: t2.present,
+          dose2: d2.present
+        };
+
+        ['time1', 'dose1', 'time2', 'dose2'].forEach(function (k) {
+          if (statusMap[k]) presentKeys.push(k);
+          else missingKeys.push(k);
+        });
+
+        // 不足 3 欄：等待繼續輸入
+        if (presentKeys.length < 3) {
+          clearComputedVisuals();
+          resetMetrics(ht.halfTime, ht.lambda);
+          var remaining = 3 - presentKeys.length;
+          setStatus(
+            'neutral',
+            '已輸入 ' + presentKeys.length + ' / 3 個主欄位（還差 ' + remaining + ' 個）',
+            '請任意填寫 3 個欄位，第 4 個空白欄位將自動計算。'
+          );
+          return;
+        }
+
+        // 4 欄皆有值：顯示目前 4 欄的一致性摘要，並提示可按 ↓ / ↑ 指定方向重算
+        if (presentKeys.length === 4) {
+          var d1Date = resolveDateStr(dom.inputDate1, false);
+          var d2Date = resolveDateStr(dom.inputDate2, false);
+          var el4 = computeElapsedMinutes(d1Date, t1.minutes, d2Date, t2.minutes);
+          if (el4.valid) {
+            var df4 = Math.exp(-ht.lambda * el4.dt);
+            var bf4 = Math.exp(ht.lambda * el4.dt);
+            var span4 =
+              d1Date + ' ' + t1.formatted + ' → ' + d2Date + ' ' + t2.formatted +
+              (el4.wrappedMidnight ? '（跨午夜）' : '');
+            updateMetrics(el4.dt, span4, df4, bf4, ht.lambda, ht.halfTime);
+            setStatus(
+              'success',
+              '4 個主欄位皆已有值（Δt = ' + el4.dt + ' min）',
+              '若修改任一欄位或切換核種，請清空目標欄位自動重算，或直接按「↓ 往下推算」/「↑ 往上回推」。'
+            );
+          } else {
+            resetMetrics(ht.halfTime, ht.lambda);
+            setStatus(
+              'error',
+              '日期順序有誤：Date2 早於 Date1',
+              '目標日期（' + d2Date + ' ' + t2.formatted + '）早於起始日期（' + d1Date + ' ' + t1.formatted + '）。'
+            );
+          }
+          return;
+        }
+
+        // 恰有 3 欄有值、1 欄空白 -> 自動計算該空白欄位
+        var targetToSolve = missingKeys[0];
+        solveTarget(targetToSolve);
+      }
+
+      // ========================================================================
+      // 5. 使用者互動事件處理
+      // ========================================================================
+
+      // 當使用者主動修改某個主欄位時：
+      // 若先前有一個由系統自動算出的欄位，且使用者修改的是另外 3 個已知欄位之一，
+      // 則先清除先前的自動計算結果，讓 evaluateAutoSolve 以新數值重新計算該未知欄位！
+      function handleUserEditedField(editedKey) {
+        if (isUpdating) return;
+        if (lastComputedField && lastComputedField !== editedKey) {
+          wipePreviousComputedValue();
+        } else if (lastComputedField === editedKey) {
+          clearComputedVisuals();
+        }
+        evaluateAutoSolve();
+      }
+
+      // 同步 MBq <-> mCi（僅更新另一單位欄位，不干擾正在輸入的欄位）
+      function bindDoseSync(mbqEl, mciEl, fieldKey) {
+        mbqEl.addEventListener('input', function () {
+          if (isUpdating) return;
+          var raw = String(mbqEl.value == null ? '' : mbqEl.value).trim();
+          isUpdating = true;
+          try {
+            if (raw === '') {
+              mciEl.value = '';
+            } else {
+              var num = Number(raw);
+              if (isFinite(num) && num >= 0) {
+                mciEl.value = formatNumberClean(num / MBQ_PER_MCI, 2);
+              }
+            }
+          } finally {
+            isUpdating = false;
+          }
+          handleUserEditedField(fieldKey);
+        });
+
+        mciEl.addEventListener('input', function () {
+          if (isUpdating) return;
+          var raw = String(mciEl.value == null ? '' : mciEl.value).trim();
+          isUpdating = true;
+          try {
+            if (raw === '') {
+              mbqEl.value = '';
+            } else {
+              var num = Number(raw);
+              if (isFinite(num) && num >= 0) {
+                mbqEl.value = formatNumberClean(num * MBQ_PER_MCI, 2);
+              }
+            }
+          } finally {
+            isUpdating = false;
+          }
+          handleUserEditedField(fieldKey);
+        });
+      }
+
+      bindDoseSync(dom.inputDose1Mbq, dom.inputDose1Mci, 'dose1');
+      bindDoseSync(dom.inputDose2Mbq, dom.inputDose2Mci, 'dose2');
+
+      // Time1 / Time2 輸入事件（自動過濾非數字字元）
+      function bindTimeInput(timeEl, dateEl, fieldKey) {
+        timeEl.addEventListener('input', function () {
+          if (isUpdating) return;
+          var digitsOnly = String(timeEl.value || '').replace(/\D/g, '').slice(0, 4);
+          if (timeEl.value !== digitsOnly) {
+            isUpdating = true;
+            try {
+              timeEl.value = digitsOnly;
+            } finally {
+              isUpdating = false;
+            }
+          }
+          // 若日期為空白，自動補入本機今天
+          resolveDateStr(dateEl, true);
+          handleUserEditedField(fieldKey);
+        });
+      }
+
+      bindTimeInput(dom.inputTime1, dom.inputDate1, 'time1');
+      bindTimeInput(dom.inputTime2, dom.inputDate2, 'time2');
+
+      // Date1 / Date2 變更與離開焦點事件
+      function bindDateInput(dateEl, fieldKey) {
+        dateEl.addEventListener('change', function () {
+          if (isUpdating) return;
+          if (!String(dateEl.value || '').trim()) {
+            resolveDateStr(dateEl, true);
+          }
+          handleUserEditedField(fieldKey);
+        });
+        dateEl.addEventListener('blur', function () {
+          if (isUpdating) return;
+          if (!String(dateEl.value || '').trim()) {
+            resolveDateStr(dateEl, true);
+            evaluateAutoSolve();
+          }
+        });
+      }
+
+      bindDateInput(dom.inputDate1, 'time1');
+      bindDateInput(dom.inputDate2, 'time2');
+
+      // 「今天」快捷按鈕
+      dom.btnToday1.addEventListener('click', function () {
+        var today = getLocalTodayStr();
+        isUpdating = true;
+        try {
+          dom.inputDate1.value = today;
+        } finally {
+          isUpdating = false;
+        }
+        handleUserEditedField('time1');
+      });
+
+      dom.btnToday2.addEventListener('click', function () {
+        var today = getLocalTodayStr();
+        isUpdating = true;
+        try {
+          dom.inputDate2.value = today;
+        } finally {
+          isUpdating = false;
+        }
+        handleUserEditedField('time2');
+      });
+
+      // 核種選擇與半衰期修改
+      function handleIsotopeChange() {
+        var selected = dom.isotopeSelect.value;
+        if (Object.prototype.hasOwnProperty.call(ISOTOPE_HALF_TIMES, selected)) {
+          isUpdating = true;
+          try {
+            dom.inputHalfTime.value = String(ISOTOPE_HALF_TIMES[selected]);
+          } finally {
+            isUpdating = false;
+          }
+        }
+        updateHalfTimeDisplay();
+        if (lastComputedField) {
+          wipePreviousComputedValue();
+        }
+        evaluateAutoSolve();
+      }
+
+      dom.isotopeSelect.addEventListener('change', handleIsotopeChange);
+      dom.isotopeSelect.addEventListener('input', handleIsotopeChange);
+
+      dom.inputHalfTime.addEventListener('input', function () {
+        if (isUpdating) return;
+        // 檢查是否與預設核種相符，若不相符則自動切換下拉為「自訂」
+        var val = Number(dom.inputHalfTime.value);
+        var matchedKey = 'CUSTOM';
+        Object.keys(ISOTOPE_HALF_TIMES).forEach(function (k) {
+          if (Math.abs(ISOTOPE_HALF_TIMES[k] - val) < 1e-6) {
+            matchedKey = k;
+          }
+        });
+        isUpdating = true;
+        try {
+          dom.isotopeSelect.value = matchedKey;
+        } finally {
+          isUpdating = false;
+        }
+        updateHalfTimeDisplay();
+        if (lastComputedField) {
+          wipePreviousComputedValue();
+        }
+        evaluateAutoSolve();
+      });
+
+      // ↓ 往下推算按鈕（由起始點 1 推算目標點 2）
+      dom.btnCalcDown.addEventListener('click', function () {
+        resolveDateStr(dom.inputDate1, true);
+        resolveDateStr(dom.inputDate2, true);
+        var t1 = parseTimeField(dom.inputTime1.value);
+        var t2 = parseTimeField(dom.inputTime2.value);
+        var d1 = readDoseField(dom.inputDose1Mbq, dom.inputDose1Mci, 'Dose 1');
+        var d2 = readDoseField(dom.inputDose2Mbq, dom.inputDose2Mci, 'Dose 2');
+
+        // 優先推算空白的目標欄位；若 4 欄皆有值，則重算 Dose 2
+        if (!d2.present && t1.valid && t2.valid && d1.valid) {
+          solveTarget('dose2');
+          return;
+        }
+        if (!t2.present && t1.valid && d1.valid && d2.valid) {
+          solveTarget('time2');
+          return;
+        }
+        if (t1.valid && t2.valid && d1.valid) {
+          solveTarget('dose2');
+          return;
+        }
+        if (t1.valid && d1.valid && d2.valid) {
+          solveTarget('time2');
+          return;
+        }
+        setStatus(
+          'warn',
+          '↓ 往下推算需起始點資料齊全',
+          '請填妥 Date1/Time1、Dose 1，以及 Date2/Time2（推算 Dose 2）或 Dose 2（推算 Time2）。'
+        );
+      });
+
+      // ↑ 往上回推按鈕（由目標點 2 回推起始點 1）
+      dom.btnCalcUp.addEventListener('click', function () {
+        resolveDateStr(dom.inputDate1, true);
+        resolveDateStr(dom.inputDate2, true);
+        var t1 = parseTimeField(dom.inputTime1.value);
+        var t2 = parseTimeField(dom.inputTime2.value);
+        var d1 = readDoseField(dom.inputDose1Mbq, dom.inputDose1Mci, 'Dose 1');
+        var d2 = readDoseField(dom.inputDose2Mbq, dom.inputDose2Mci, 'Dose 2');
+
+        // 優先回推空白的起始欄位；若 4 欄皆有值，則重算 Dose 1
+        if (!d1.present && t1.valid && t2.valid && d2.valid) {
+          solveTarget('dose1');
+          return;
+        }
+        if (!t1.present && t2.valid && d1.valid && d2.valid) {
+          solveTarget('time1');
+          return;
+        }
+        if (t1.valid && t2.valid && d2.valid) {
+          solveTarget('dose1');
+          return;
+        }
+        if (t2.valid && d1.valid && d2.valid) {
+          solveTarget('time1');
+          return;
+        }
+        setStatus(
+          'warn',
+          '↑ 往上回推需目標點資料齊全',
+          '請填妥 Date2/Time2、Dose 2，以及 Date1/Time1（回推 Dose 1）或 Dose 1（回推 Time1）。'
+        );
+      });
+
+      // ⇅ 上下交換按鈕
+      dom.btnSwapTopBottom.addEventListener('click', function () {
+        var d1 = dom.inputDate1.value;
+        var t1 = dom.inputTime1.value;
+        var m1 = dom.inputDose1Mbq.value;
+        var c1 = dom.inputDose1Mci.value;
+
+        var d2 = dom.inputDate2.value;
+        var t2 = dom.inputTime2.value;
+        var m2 = dom.inputDose2Mbq.value;
+        var c2 = dom.inputDose2Mci.value;
+
+        isUpdating = true;
+        try {
+          clearComputedVisuals();
+          dom.inputDate1.value = d2;
+          dom.inputTime1.value = t2;
+          dom.inputDose1Mbq.value = m2;
+          dom.inputDose1Mci.value = c2;
+
+          dom.inputDate2.value = d1;
+          dom.inputTime2.value = t1;
+          dom.inputDose2Mbq.value = m1;
+          dom.inputDose2Mci.value = c1;
+        } finally {
+          isUpdating = false;
+        }
+        evaluateAutoSolve();
+      });
+
+      // 填入範例（0800 -> 1200, Dose 2 = 400 MBq, F-18 109.74 min -> 自動回推 Dose 1 = 1821.41 MBq）
+      dom.btnExample0800.addEventListener('click', function () {
+        var today = getLocalTodayStr();
+        isUpdating = true;
+        try {
+          clearComputedVisuals();
+          dom.isotopeSelect.value = 'F-18';
+          dom.inputHalfTime.value = '109.74';
+          dom.inputDate1.value = today;
+          dom.inputTime1.value = '0800';
+          dom.inputDose1Mbq.value = '';
+          dom.inputDose1Mci.value = '';
+          dom.inputDate2.value = today;
+          dom.inputTime2.value = '1200';
+          dom.inputDose2Mbq.value = '400';
+          dom.inputDose2Mci.value = formatNumberClean(400 / MBQ_PER_MCI, 2);
+        } finally {
+          isUpdating = false;
+        }
+        updateHalfTimeDisplay();
+        evaluateAutoSolve();
+      });
+
+      // 全部清空（時間與活度恢復空白，日期重設為本機今天）
+      dom.btnClearAll.addEventListener('click', function () {
+        var today = getLocalTodayStr();
+        isUpdating = true;
+        try {
+          clearComputedVisuals();
+          dom.inputDate1.value = today;
+          dom.inputTime1.value = '';
+          dom.inputDose1Mbq.value = '';
+          dom.inputDose1Mci.value = '';
+
+          dom.inputDate2.value = today;
+          dom.inputTime2.value = '';
+          dom.inputDose2Mbq.value = '';
+          dom.inputDose2Mci.value = '';
+        } finally {
+          isUpdating = false;
+        }
+        updateHalfTimeDisplay();
+        evaluateAutoSolve();
+      });
+
+      // ========================================================================
+      // 6. 頁面初始化（日期設為今天，時間與活度維持空白）
+      // ========================================================================
+      function init() {
+        var today = getLocalTodayStr();
+        isUpdating = true;
+        try {
+          dom.inputDate1.value = today;
+          dom.inputDate2.value = today;
+          dom.inputTime1.value = '';
+          dom.inputTime2.value = '';
+          dom.inputDose1Mbq.value = '';
+          dom.inputDose1Mci.value = '';
+          dom.inputDose2Mbq.value = '';
+          dom.inputDose2Mci.value = '';
+        } finally {
+          isUpdating = false;
+        }
+        updateHalfTimeDisplay();
+        evaluateAutoSolve();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
