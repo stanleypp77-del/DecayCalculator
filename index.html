@@ -763,7 +763,7 @@
 
           <!-- 中間控制按鈕列：往下推算、往上回推、上下交換 -->
           <div class="direction-bar" role="group" aria-label="上下方向推算與交換">
-            <button type="button" id="btnCalcDown" onclick="window.runCalcDown()" class="dir-btn" title="由上方往下推算下方欄位">
+            <button type="button" id="btnCalcDown" class="dir-btn" title="由上方往下推算下方欄位">
               <span class="dir-arrow" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="18" height="18">
                   <line x1="12" y1="4" x2="12" y2="20"></line>
@@ -772,7 +772,7 @@
               </span>
               <span>往下推算</span>
             </button>
-            <button type="button" id="btnCalcUp" onclick="window.runCalcUp()" class="dir-btn" title="由下方往上回推上方欄位">
+            <button type="button" id="btnCalcUp" class="dir-btn" title="由下方往上回推上方欄位">
               <span class="dir-arrow" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="18" height="18">
                   <line x1="12" y1="20" x2="12" y2="4"></line>
@@ -781,7 +781,7 @@
               </span>
               <span>往上回推</span>
             </button>
-            <button type="button" id="btnSwapTopBottom" onclick="window.runSwapTopBottom()" class="dir-btn" title="交換上方（1）與下方（2）數值">
+            <button type="button" id="btnSwapTopBottom" class="dir-btn" title="交換上方（1）與下方（2）數值">
               <span class="dir-arrow" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="18" height="18">
                   <line x1="8" y1="4" x2="8" y2="17"></line>
@@ -1892,32 +1892,61 @@
 
       // 上下交換按鈕函式
       function runSwapTopBottom() {
-        var d1 = dom.inputDate1.value;
-        var t1 = dom.inputTime1.value;
-        var m1 = dom.inputDose1Mbq.value;
-        var c1 = dom.inputDose1Mci.value;
+        var elDate1 = document.getElementById('inputDate1');
+        var elTime1 = document.getElementById('inputTime1');
+        var elDose1Mbq = document.getElementById('inputDose1Mbq');
+        var elDose1Mci = document.getElementById('inputDose1Mci');
 
-        var d2 = dom.inputDate2.value;
-        var t2 = dom.inputTime2.value;
-        var m2 = dom.inputDose2Mbq.value;
-        var c2 = dom.inputDose2Mci.value;
+        var elDate2 = document.getElementById('inputDate2');
+        var elTime2 = document.getElementById('inputTime2');
+        var elDose2Mbq = document.getElementById('inputDose2Mbq');
+        var elDose2Mci = document.getElementById('inputDose2Mci');
+
+        var prevComputed = lastComputedField;
+        var swappedComputed = null;
+        if (prevComputed === 'time1') swappedComputed = 'time2';
+        else if (prevComputed === 'time2') swappedComputed = 'time1';
+        else if (prevComputed === 'dose1') swappedComputed = 'dose2';
+        else if (prevComputed === 'dose2') swappedComputed = 'dose1';
+
+        var d1 = elDate1 ? elDate1.value : '';
+        var t1 = elTime1 ? elTime1.value : '';
+        var m1 = elDose1Mbq ? elDose1Mbq.value : '';
+        var c1 = elDose1Mci ? elDose1Mci.value : '';
+
+        var d2 = elDate2 ? elDate2.value : '';
+        var t2 = elTime2 ? elTime2.value : '';
+        var m2 = elDose2Mbq ? elDose2Mbq.value : '';
+        var c2 = elDose2Mci ? elDose2Mci.value : '';
 
         isUpdating = true;
         try {
           clearComputedVisuals();
-          dom.inputDate1.value = d2;
-          dom.inputTime1.value = t2;
-          dom.inputDose1Mbq.value = m2;
-          dom.inputDose1Mci.value = c2;
+          if (elDate1) elDate1.value = d2;
+          if (elTime1) elTime1.value = t2;
+          if (elDose1Mbq) elDose1Mbq.value = m2;
+          if (elDose1Mci) elDose1Mci.value = c2;
 
-          dom.inputDate2.value = d1;
-          dom.inputTime2.value = t1;
-          dom.inputDose2Mbq.value = m1;
-          dom.inputDose2Mci.value = c1;
+          if (elDate2) elDate2.value = d1;
+          if (elTime2) elTime2.value = t1;
+          if (elDose2Mbq) elDose2Mbq.value = m1;
+          if (elDose2Mci) elDose2Mci.value = c1;
         } finally {
           isUpdating = false;
         }
+
         evaluateAutoSolve();
+
+        // 若交換後 4 欄皆有值且原本有推算標記，保留對應交換後的推算高亮標記
+        if (swappedComputed && !lastComputedField) {
+          var t1Check = parseTimeField(elTime1 ? elTime1.value : '');
+          var t2Check = parseTimeField(elTime2 ? elTime2.value : '');
+          var d1Check = readDoseField(elDose1Mbq, elDose1Mci, 'Dose 1');
+          var d2Check = readDoseField(elDose2Mbq, elDose2Mci, 'Dose 2');
+          if (t1Check.valid && t2Check.valid && d1Check.valid && d2Check.valid) {
+            setComputedFieldHighlight(swappedComputed);
+          }
+        }
       }
 
       // 全部清空函式（保留目前選擇的核種與半衰期，清除所有時間、活度與標記，日期重設為今天）
@@ -1965,7 +1994,12 @@
       });
       dom.btnCalcDown.addEventListener('click', runCalcDown);
       dom.btnCalcUp.addEventListener('click', runCalcUp);
-      dom.btnSwapTopBottom.addEventListener('click', runSwapTopBottom);
+      if (dom.btnSwapTopBottom) {
+        dom.btnSwapTopBottom.addEventListener('click', function (e) {
+          if (e && e.preventDefault) e.preventDefault();
+          runSwapTopBottom();
+        });
+      }
       dom.btnClearAll.addEventListener('click', clearAllDataFields);
 
       // ========================================================================
